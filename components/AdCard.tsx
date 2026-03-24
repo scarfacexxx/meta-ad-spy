@@ -3,6 +3,9 @@ import type { AdResult } from "@/app/api/ads/route";
 interface Props {
   ad: AdResult;
   rank: number;
+  isSaved?: boolean;
+  onSave?: (ad: AdResult) => void;
+  onUnsave?: (ad: AdResult) => void;
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -35,7 +38,7 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
-export default function AdCard({ ad, rank }: Props) {
+export default function AdCard({ ad, rank, isSaved, onSave, onUnsave }: Props) {
   const body = ad.ad_creative_bodies?.[0];
   const title = ad.ad_creative_link_titles?.[0];
   const description = ad.ad_creative_link_descriptions?.[0];
@@ -69,6 +72,19 @@ export default function AdCard({ ad, rank }: Props) {
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {(onSave || onUnsave) && (
+                <button
+                  onClick={() => isSaved ? onUnsave?.(ad) : onSave?.(ad)}
+                  className={`text-lg transition-colors ${
+                    isSaved
+                      ? "text-red-400 hover:text-red-300"
+                      : "text-gray-600 hover:text-red-400"
+                  }`}
+                  title={isSaved ? "Remover dos salvos" : "Salvar ad"}
+                >
+                  {isSaved ? "\u2764" : "\u2661"}
+                </button>
+              )}
               {ad.is_active && (
                 <span className="flex items-center gap-1 text-xs bg-green-900/50 text-green-400 border border-green-800 rounded-full px-2 py-0.5">
                   <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block" />

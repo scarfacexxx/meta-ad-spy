@@ -10,7 +10,17 @@
       "Bash(npx tsc:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(gh repo:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(command -v npm)",
+      "Bash(where npm:*)",
+      "Read(//c/Program Files/GitHub CLI//**)",
+      "Read(//c/Users/alerm/AppData/Local/Programs/**)",
+      "Read(//c/Users/alerm/**)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth status)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" repo create meta-ad-spy --public --source=. --remote=origin --push)",
+      "Bash(git push:*)"
     ]
   }
 }

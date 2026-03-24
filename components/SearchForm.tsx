@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { parseSearchInput } from "@/lib/parseInput";
 
 interface Props {
   onSearch: (params: {
@@ -10,6 +11,7 @@ interface Props {
     page_id: string;
   }) => void;
   loading: boolean;
+  prefill?: { q?: string; page_id?: string } | null;
 }
 
 const COUNTRIES = [
@@ -20,15 +22,26 @@ const COUNTRIES = [
   { code: "MX", label: "México" },
 ];
 
-export default function SearchForm({ onSearch, loading }: Props) {
-  const [q, setQ] = useState("");
-  const [pageId, setPageId] = useState("");
+export default function SearchForm({ onSearch, loading, prefill }: Props) {
+  const [input, setInput] = useState("");
   const [country, setCountry] = useState("BR");
   const [active, setActive] = useState(false);
 
+  useEffect(() => {
+    if (prefill) {
+      setInput(prefill.page_id ?? prefill.q ?? "");
+    }
+  }, [prefill]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSearch({ q, country, active, page_id: pageId });
+    const parsed = parseSearchInput(input);
+    onSearch({
+      q: parsed.type === "keyword" ? parsed.value : "",
+      country,
+      active,
+      page_id: parsed.type === "page_id" ? parsed.value : "",
+    });
   }
 
   return (
@@ -36,35 +49,19 @@ export default function SearchForm({ onSearch, loading }: Props) {
       onSubmit={handleSubmit}
       className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4"
     >
-      {/* Busca */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">
-            Nome da Página / Palavra-chave
-          </label>
-          <input
-            type="text"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Ex: Nike, academia, suplementos..."
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">
-            ID da Página (opcional, mais preciso)
-          </label>
-          <input
-            type="text"
-            value={pageId}
-            onChange={(e) => setPageId(e.target.value)}
-            placeholder="Ex: 123456789"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-          />
-        </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-400 mb-1">
+          Buscar por nome, ID, URL do Facebook ou URL da Ad Library
+        </label>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ex: Nike, 123456789, facebook.com/nike, ou URL da Ad Library..."
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
       </div>
 
-      {/* Filtros */}
       <div className="flex flex-wrap gap-4 items-center">
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1">
@@ -96,7 +93,7 @@ export default function SearchForm({ onSearch, loading }: Props) {
 
       <button
         type="submit"
-        disabled={loading || (!q && !pageId)}
+        disabled={loading || !input.trim()}
         className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg py-2.5 text-sm transition-colors"
       >
         {loading ? "Buscando..." : "Buscar Ads"}
