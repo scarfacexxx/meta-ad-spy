@@ -7,7 +7,6 @@ interface Props {
     q: string;
     country: string;
     active: boolean;
-    token: string;
     page_id: string;
   }) => void;
   loading: boolean;
@@ -26,15 +25,10 @@ export default function SearchForm({ onSearch, loading }: Props) {
   const [pageId, setPageId] = useState("");
   const [country, setCountry] = useState("BR");
   const [active, setActive] = useState(false);
-  const [token, setToken] = useState(
-    typeof window !== "undefined" ? localStorage.getItem("meta_token") ?? "" : ""
-  );
-  const [showToken, setShowToken] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (token) localStorage.setItem("meta_token", token);
-    onSearch({ q, country, active, token, page_id: pageId });
+    onSearch({ q, country, active, page_id: pageId });
   }
 
   return (
@@ -42,37 +36,6 @@ export default function SearchForm({ onSearch, loading }: Props) {
       onSubmit={handleSubmit}
       className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4"
     >
-      {/* Token */}
-      <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">
-          Token de Acesso Meta{" "}
-          <a
-            href="https://developers.facebook.com/tools/explorer/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:underline"
-          >
-            (obter token)
-          </a>
-        </label>
-        <div className="flex gap-2">
-          <input
-            type={showToken ? "text" : "password"}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="EAAxxxxxxx..."
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-          />
-          <button
-            type="button"
-            onClick={() => setShowToken((v) => !v)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 text-xs hover:text-white"
-          >
-            {showToken ? "Ocultar" : "Mostrar"}
-          </button>
-        </div>
-      </div>
-
       {/* Busca */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -133,7 +96,7 @@ export default function SearchForm({ onSearch, loading }: Props) {
 
       <button
         type="submit"
-        disabled={loading || (!q && !pageId) || !token}
+        disabled={loading || (!q && !pageId)}
         className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg py-2.5 text-sm transition-colors"
       >
         {loading ? "Buscando..." : "Buscar Ads"}

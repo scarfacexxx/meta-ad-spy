@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const query = searchParams.get("q") ?? "";
   const country = searchParams.get("country") ?? "BR";
   const activeOnly = searchParams.get("active") === "true";
-  const token = searchParams.get("token") ?? process.env.META_ACCESS_TOKEN ?? "";
+  const token = process.env.META_ACCESS_TOKEN ?? "";
   const pageId = searchParams.get("page_id") ?? "";
 
   if (!token) {

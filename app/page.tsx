@@ -15,7 +15,6 @@ export default function Home() {
     q: string;
     country: string;
     active: boolean;
-    token: string;
     page_id: string;
   }) {
     setLoading(true);
@@ -27,7 +26,6 @@ export default function Home() {
       q: params.q,
       country: params.country,
       active: String(params.active),
-      token: params.token,
       page_id: params.page_id,
     });
 
