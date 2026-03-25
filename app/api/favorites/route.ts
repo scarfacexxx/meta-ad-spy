@@ -12,18 +12,24 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { ad_id, page_name, body, title, snapshot_url, score, days_running, platforms } =
+    const { page_name, ad_url, body, title, screenshot_url, tags, notes, hook_type, ad_type, platforms } =
       await req.json();
 
+    if (!page_name) {
+      return NextResponse.json({ error: "Nome da página é obrigatório." }, { status: 400 });
+    }
+
+    const tagsStr = Array.isArray(tags) ? tags.join(",") : tags ?? "";
     const platformsStr = Array.isArray(platforms) ? platforms.join(",") : platforms ?? "";
 
     const { rows } = await sql`
-      INSERT INTO saved_ads (ad_id, page_name, body, title, snapshot_url, score, days_running, platforms)
-      VALUES (${ad_id}, ${page_name}, ${body ?? null}, ${title ?? null}, ${snapshot_url}, ${score ?? 0}, ${days_running ?? 0}, ${platformsStr})
+      INSERT INTO saved_ads (page_name, ad_url, body, title, screenshot_url, tags, notes, hook_type, ad_type, platforms)
+      VALUES (${page_name}, ${ad_url ?? null}, ${body ?? null}, ${title ?? null}, ${screenshot_url ?? null}, ${tagsStr}, ${notes ?? ""}, ${hook_type ?? null}, ${ad_type ?? null}, ${platformsStr})
       RETURNING *
     `;
     return NextResponse.json({ ad: rows[0] });
-  } catch {
+  } catch (e) {
+    console.error(e);
     return NextResponse.json({ error: "Erro ao salvar ad." }, { status: 500 });
   }
 }

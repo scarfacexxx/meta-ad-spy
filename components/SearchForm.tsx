@@ -15,11 +15,17 @@ interface Props {
 }
 
 const COUNTRIES = [
-  { code: "BR", label: "Brasil" },
-  { code: "US", label: "Estados Unidos" },
-  { code: "PT", label: "Portugal" },
-  { code: "AR", label: "Argentina" },
-  { code: "MX", label: "México" },
+  { code: "BR", label: "🇧🇷 Brasil" },
+  { code: "US", label: "🇺🇸 EUA" },
+  { code: "PT", label: "🇵🇹 Portugal" },
+  { code: "AR", label: "🇦🇷 Argentina" },
+  { code: "MX", label: "🇲🇽 México" },
+  { code: "GB", label: "🇬🇧 Reino Unido" },
+  { code: "DE", label: "🇩🇪 Alemanha" },
+  { code: "ES", label: "🇪🇸 Espanha" },
+  { code: "FR", label: "🇫🇷 França" },
+  { code: "IT", label: "🇮🇹 Itália" },
+  { code: "ALL", label: "🌎 Todos" },
 ];
 
 export default function SearchForm({ onSearch, loading, prefill }: Props) {
@@ -62,25 +68,20 @@ export default function SearchForm({ onSearch, loading, prefill }: Props) {
         />
       </div>
 
-      <div className="flex flex-wrap gap-4 items-center">
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">
-            País
-          </label>
-          <select
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-          >
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <select
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+        >
+          {COUNTRIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
+            </option>
+          ))}
+        </select>
 
-        <label className="flex items-center gap-2 cursor-pointer mt-4">
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={active}

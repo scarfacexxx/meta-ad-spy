@@ -1,42 +1,93 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import AdCard from "@/components/AdCard";
-import SearchForm from "@/components/SearchForm";
 import SavedSearches from "@/components/SavedSearches";
-import type { AdResult } from "@/app/api/ads/route";
 
-type Tab = "search" | "favorites";
+type Tab = "library" | "favorites" | "add";
+
+interface ScrapedAd {
+  body: string | null;
+  title: string | null;
+  started: string | null;
+  status: string | null;
+  platforms: string[];
+  snapshot_url: string | null;
+}
+
+interface ScrapeResult {
+  page_name: string;
+  page_id: string | null;
+  query: string | null;
+  country: string;
+  ads: ScrapedAd[];
+  total: number;
+}
 
 interface SavedAd {
   id: number;
-  ad_id: string;
   page_name: string;
+  ad_url: string | null;
   body: string | null;
   title: string | null;
-  snapshot_url: string;
-  score: number;
-  days_running: number;
+  screenshot_url: string | null;
+  tags: string;
+  notes: string;
+  hook_type: string | null;
+  ad_type: string | null;
   platforms: string;
+  created_at: string;
 }
 
+const HOOK_TYPES = [
+  "Pergunta",
+  "Dor/Problema",
+  "Prova Social",
+  "Urgência",
+  "Curiosidade",
+  "Antes/Depois",
+  "Estatística",
+  "Polêmica",
+  "História",
+  "Outro",
+];
+
+const AD_TYPES = [
+  "Imagem",
+  "Vídeo",
+  "Carrossel",
+  "Stories",
+  "Reels",
+  "Outro",
+];
+
 export default function Home() {
-  const [ads, setAds] = useState<AdResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searched, setSearched] = useState(false);
-  const [tab, setTab] = useState<Tab>("search");
+  const [tab, setTab] = useState<Tab>("library");
   const [favorites, setFavorites] = useState<SavedAd[]>([]);
-  const [savedAdIds, setSavedAdIds] = useState<Set<string>>(new Set());
-  const [prefill, setPrefill] = useState<{ q?: string; page_id?: string } | null>(null);
+  const [filterTag, setFilterTag] = useState<string>("");
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
+
+  // Add form state
+  const [form, setForm] = useState({
+    page_name: "",
+    ad_url: "",
+    body: "",
+    title: "",
+    tags: "",
+    notes: "",
+    hook_type: "",
+    ad_type: "",
+    platforms: [] as string[],
+  });
+  const [saving, setSaving] = useState(false);
 
   const loadFavorites = useCallback(async () => {
     try {
       const res = await fetch("/api/favorites");
       const data = await res.json();
-      const favs: SavedAd[] = data.ads ?? [];
-      setFavorites(favs);
-      setSavedAdIds(new Set(favs.map((f) => f.ad_id)));
+      setFavorites(data.ads ?? []);
     } catch {
       /* ignore */
     }
@@ -46,54 +97,81 @@ export default function Home() {
     loadFavorites();
   }, [loadFavorites]);
 
-  async function handleSearch(params: {
-    q: string;
-    country: string;
-    active: boolean;
-    page_id: string;
-  }) {
-    setLoading(true);
-    setError(null);
-    setAds([]);
-    setSearched(true);
-    setTab("search");
-
-    const qs = new URLSearchParams({
-      q: params.q,
-      country: params.country,
-      active: String(params.active),
-      page_id: params.page_id,
-    });
-
+  async function handleSaveAd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.page_name.trim()) return;
+    setSaving(true);
     try {
-      const res = await fetch(`/api/ads?${qs}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Erro desconhecido");
-      } else {
-        setAds(data.ads);
-      }
+      await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      setForm({
+        page_name: "",
+        ad_url: "",
+        body: "",
+        title: "",
+        tags: "",
+        notes: "",
+        hook_type: "",
+        ad_type: "",
+        platforms: [],
+      });
+      loadFavorites();
+      setTab("favorites");
     } catch {
-      setError("Falha ao buscar ads.");
+      /* ignore */
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
-  async function handleSaveAd(ad: AdResult) {
+  async function handleRemoveFavorite(id: number) {
+    try {
+      await fetch(`/api/favorites/${id}`, { method: "DELETE" });
+      setFavorites((prev) => prev.filter((f) => f.id !== id));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleScrape(e: React.FormEvent) {
+    e.preventDefault();
+    if (!scrapeUrl.trim()) return;
+    setScraping(true);
+    setScrapeError(null);
+    setScrapeResult(null);
+    try {
+      const res = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scrapeUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScrapeError(data.error ?? "Erro ao extrair dados.");
+      } else {
+        setScrapeResult(data);
+      }
+    } catch {
+      setScrapeError("Falha ao conectar com o servidor.");
+    } finally {
+      setScraping(false);
+    }
+  }
+
+  async function handleSaveScrapedAd(ad: ScrapedAd, pageName: string) {
     try {
       await fetch("/api/favorites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ad_id: ad.id,
-          page_name: ad.page_name,
-          body: ad.ad_creative_bodies?.[0] ?? null,
-          title: ad.ad_creative_link_titles?.[0] ?? null,
-          snapshot_url: ad.ad_snapshot_url,
-          score: ad.score,
-          days_running: ad.days_running,
-          platforms: ad.publisher_platforms,
+          page_name: pageName,
+          ad_url: ad.snapshot_url ?? scrapeUrl,
+          body: ad.body,
+          title: ad.title,
+          platforms: ad.platforms,
         }),
       });
       loadFavorites();
@@ -102,87 +180,78 @@ export default function Home() {
     }
   }
 
-  async function handleUnsaveAd(ad: AdResult) {
-    const fav = favorites.find((f) => f.ad_id === ad.id);
-    if (!fav) return;
-    try {
-      await fetch(`/api/favorites/${fav.id}`, { method: "DELETE" });
-      loadFavorites();
-    } catch {
-      /* ignore */
-    }
-  }
-
-  async function handleRemoveFavorite(savedAd: SavedAd) {
-    try {
-      await fetch(`/api/favorites/${savedAd.id}`, { method: "DELETE" });
-      loadFavorites();
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function handleSelectSavedSearch(search: { name: string; page_id: string | null }) {
-    setPrefill({
-      q: search.page_id ? undefined : search.name,
-      page_id: search.page_id ?? undefined,
-    });
-    // Auto-search
-    handleSearch({
-      q: search.page_id ? "" : search.name,
+  function handleOpenLibrary(search: { name: string; page_id: string | null }) {
+    const baseUrl = "https://www.facebook.com/ads/library/";
+    const params = new URLSearchParams({
+      active_status: "active",
+      ad_type: "all",
       country: "BR",
-      active: false,
-      page_id: search.page_id ?? "",
+      media_type: "all",
     });
+    if (search.page_id) {
+      params.set("view_all_page_id", search.page_id);
+    } else {
+      params.set("q", search.name);
+    }
+    window.open(`${baseUrl}?${params.toString()}`, "_blank");
   }
 
-  function savedAdToAdResult(s: SavedAd): AdResult {
-    return {
-      id: s.ad_id,
-      page_id: "",
-      page_name: s.page_name,
-      ad_creative_bodies: s.body ? [s.body] : undefined,
-      ad_creative_link_titles: s.title ? [s.title] : undefined,
-      ad_snapshot_url: s.snapshot_url,
-      score: s.score,
-      days_running: s.days_running,
-      is_active: false,
-      variations_count: 1,
-      publisher_platforms: s.platforms ? s.platforms.split(",") : undefined,
-    };
+  function togglePlatform(p: string) {
+    setForm((prev) => ({
+      ...prev,
+      platforms: prev.platforms.includes(p)
+        ? prev.platforms.filter((x) => x !== p)
+        : [...prev.platforms, p],
+    }));
   }
+
+  // Get all unique tags from favorites
+  const allTags = Array.from(
+    new Set(
+      favorites
+        .flatMap((f) => f.tags.split(",").map((t) => t.trim()))
+        .filter(Boolean)
+    )
+  );
+
+  const filteredFavorites = filterTag
+    ? favorites.filter((f) =>
+        f.tags
+          .split(",")
+          .map((t) => t.trim())
+          .includes(filterTag)
+      )
+    : favorites;
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
+      {/* Header */}
       <div className="border-b border-gray-800 bg-gray-900">
         <div className="max-w-5xl mx-auto px-4 py-6">
           <h1 className="text-2xl font-bold text-white">
             <span className="text-blue-400">Meta</span> Ad Spy
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            Encontre os melhores ads dos seus concorrentes e inspirações
+            Monitore concorrentes e salve os melhores ads como inspiração
           </p>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Saved searches */}
-        <SavedSearches onSelect={handleSelectSavedSearch} />
-
-        {/* Search form */}
-        <SearchForm onSearch={handleSearch} loading={loading} prefill={prefill} />
+        {/* Saved Searches — quick links to Ad Library */}
+        <SavedSearches onSelect={handleOpenLibrary} />
 
         {/* Tabs */}
         <div className="flex gap-4 border-b border-gray-800">
           <button
-            onClick={() => setTab("search")}
+            onClick={() => setTab("library")}
             className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === "search"
+              tab === "library"
                 ? "border-blue-500 text-blue-400"
                 : "border-transparent text-gray-500 hover:text-gray-300"
             }`}
           >
-            Resultados {ads.length > 0 && `(${ads.length})`}
+            Ad Library
           </button>
           <button
             onClick={() => setTab("favorites")}
@@ -194,88 +263,482 @@ export default function Home() {
           >
             Ads Salvos {favorites.length > 0 && `(${favorites.length})`}
           </button>
+          <button
+            onClick={() => setTab("add")}
+            className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === "add"
+                ? "border-blue-500 text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            + Salvar Ad
+          </button>
         </div>
 
-        {/* Search tab */}
-        {tab === "search" && (
-          <>
-            {error && (
+        {/* Ad Library tab */}
+        {tab === "library" && (
+          <div className="space-y-6">
+            {/* Scrape URL form */}
+            <form
+              onSubmit={handleScrape}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4"
+            >
+              <h2 className="text-lg font-semibold">
+                Cole a URL da Ad Library
+              </h2>
+              <p className="text-sm text-gray-400">
+                Abra a Ad Library, busque o concorrente, copie a URL da página e
+                cole aqui. O app extrai os ads automaticamente.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                  placeholder="https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=BR&view_all_page_id=..."
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="submit"
+                  disabled={scraping || !scrapeUrl.trim()}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg px-5 py-2 text-sm transition-colors whitespace-nowrap"
+                >
+                  {scraping ? "Extraindo..." : "Extrair Ads"}
+                </button>
+              </div>
+            </form>
+
+            {/* Open Ad Library button */}
+            <a
+              href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=BR&media_type=all"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 font-medium rounded-xl py-3 text-sm transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+              Abrir Meta Ad Library no navegador
+            </a>
+
+            {/* Scrape error */}
+            {scrapeError && (
               <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
-                {error}
+                {scrapeError}
               </div>
             )}
 
-            {loading && (
-              <div className="flex items-center justify-center py-16">
+            {/* Scrape results */}
+            {scrapeResult && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-300">
+                    {scrapeResult.page_name} — {scrapeResult.total} ads
+                    encontrados
+                  </h3>
+                </div>
+                {scrapeResult.ads.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    <p>
+                      A Ad Library não retornou dados extraíveis via scraping.
+                    </p>
+                    <p className="mt-2">
+                      Use o botão{" "}
+                      <span className="text-blue-400">+ Salvar Ad</span>{" "}
+                      para adicionar manualmente.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {scrapeResult.ads.map((ad, i) => (
+                      <div
+                        key={i}
+                        className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex items-start gap-3"
+                      >
+                        <div className="flex-1 min-w-0 space-y-1">
+                          {ad.body && (
+                            <p className="text-sm text-gray-300 line-clamp-3">
+                              {ad.body}
+                            </p>
+                          )}
+                          {ad.started && (
+                            <p className="text-xs text-gray-600">
+                              Iniciou: {ad.started}
+                            </p>
+                          )}
+                          {ad.snapshot_url && (
+                            <a
+                              href={ad.snapshot_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-400 hover:underline"
+                            >
+                              Ver criativo →
+                            </a>
+                          )}
+                        </div>
+                        <button
+                          onClick={() =>
+                            handleSaveScrapedAd(
+                              ad,
+                              scrapeResult.page_name
+                            )
+                          }
+                          className="text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-1.5 whitespace-nowrap"
+                        >
+                          Salvar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Loading */}
+            {scraping && (
+              <div className="flex items-center justify-center py-12">
                 <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <span className="ml-3 text-gray-400">Buscando ads...</span>
+                <span className="ml-3 text-gray-400">
+                  Extraindo ads da Ad Library...
+                </span>
               </div>
             )}
+          </div>
+        )}
 
-            {!loading && searched && ads.length === 0 && !error && (
-              <div className="text-center py-16 text-gray-500">
-                Nenhum ad encontrado. Tente outros termos.
-              </div>
-            )}
+        {/* Add Ad tab */}
+        {tab === "add" && (
+          <form
+            onSubmit={handleSaveAd}
+            className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4"
+          >
+            <h2 className="text-lg font-semibold">Salvar novo ad</h2>
 
-            {ads.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs text-gray-600 bg-gray-800 px-2 py-1 rounded">
-                    Score = longevidade + ativo + plataformas + variações
-                  </span>
-                </div>
-                <div className="grid gap-4">
-                  {ads.map((ad, i) => (
-                    <AdCard
-                      key={ad.id ?? String(i)}
-                      ad={ad}
-                      rank={i + 1}
-                      isSaved={savedAdIds.has(ad.id)}
-                      onSave={handleSaveAd}
-                      onUnsave={handleUnsaveAd}
-                    />
-                  ))}
-                </div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Nome da Página *
+                </label>
+                <input
+                  type="text"
+                  value={form.page_name}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, page_name: e.target.value }))
+                  }
+                  placeholder="Ex: Nike Brasil"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                  required
+                />
               </div>
-            )}
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  URL do Ad (Ad Library ou snapshot)
+                </label>
+                <input
+                  type="text"
+                  value={form.ad_url}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, ad_url: e.target.value }))
+                  }
+                  placeholder="https://www.facebook.com/ads/library/..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
 
-            {!searched && !loading && (
-              <div className="text-center py-16 space-y-3">
-                <div className="text-5xl">🎯</div>
-                <p className="text-gray-400 text-sm max-w-md mx-auto">
-                  Pesquise por nome, ID, URL do Facebook ou URL da Ad Library.
-                  Os ads são ranqueados por performance.
-                </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Título / Headline do Ad
+              </label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, title: e.target.value }))
+                }
+                placeholder="Ex: Transforme seu corpo em 30 dias"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Copy / Texto do Ad
+              </label>
+              <textarea
+                value={form.body}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, body: e.target.value }))
+                }
+                placeholder="Cole a copy completa do ad aqui..."
+                rows={4}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-y"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Tipo de Hook
+                </label>
+                <select
+                  value={form.hook_type}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, hook_type: e.target.value }))
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Selecione...</option>
+                  {HOOK_TYPES.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
-          </>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Tipo de Criativo
+                </label>
+                <select
+                  value={form.ad_type}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, ad_type: e.target.value }))
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Selecione...</option>
+                  {AD_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Platforms */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">
+                Plataformas
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {["Facebook", "Instagram", "Messenger", "Audience Network"].map(
+                  (p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => togglePlatform(p)}
+                      className={`text-xs rounded-full px-3 py-1 border transition-colors ${
+                        form.platforms.includes(p)
+                          ? "bg-blue-600 border-blue-500 text-white"
+                          : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Tags (separadas por vírgula)
+              </label>
+              <input
+                type="text"
+                value={form.tags}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, tags: e.target.value }))
+                }
+                placeholder="Ex: hook forte, oferta, VSL, antes/depois"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Notas pessoais
+              </label>
+              <textarea
+                value={form.notes}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, notes: e.target.value }))
+                }
+                placeholder="Por que esse ad é bom? O que copiar? Ideias..."
+                rows={2}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-y"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving || !form.page_name.trim()}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg py-2.5 text-sm transition-colors"
+            >
+              {saving ? "Salvando..." : "Salvar Ad"}
+            </button>
+          </form>
         )}
 
         {/* Favorites tab */}
         {tab === "favorites" && (
-          <>
-            {favorites.length === 0 ? (
+          <div className="space-y-4">
+            {/* Tag filter */}
+            {allTags.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs text-gray-500">Filtrar:</span>
+                <button
+                  onClick={() => setFilterTag("")}
+                  className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${
+                    !filterTag
+                      ? "bg-blue-600 border-blue-500 text-white"
+                      : "bg-gray-800 border-gray-700 text-gray-400"
+                  }`}
+                >
+                  Todos
+                </button>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setFilterTag(tag)}
+                    className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${
+                      filterTag === tag
+                        ? "bg-blue-600 border-blue-500 text-white"
+                        : "bg-gray-800 border-gray-700 text-gray-400"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {filteredFavorites.length === 0 ? (
               <div className="text-center py-16 text-gray-500">
-                Nenhum ad salvo ainda. Busque ads e clique no coração para salvar.
+                {favorites.length === 0
+                  ? 'Nenhum ad salvo. Clique em "+ Salvar Ad" para começar.'
+                  : "Nenhum ad com essa tag."}
               </div>
             ) : (
               <div className="grid gap-4">
-                {favorites.map((fav, i) => {
-                  const ad = savedAdToAdResult(fav);
-                  return (
-                    <AdCard
-                      key={fav.id}
-                      ad={ad}
-                      rank={i + 1}
-                      isSaved={true}
-                      onUnsave={() => handleRemoveFavorite(fav)}
-                    />
-                  );
-                })}
+                {filteredFavorites.map((ad) => (
+                  <div
+                    key={ad.id}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        {/* Header */}
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white text-sm">
+                            {ad.page_name}
+                          </span>
+                          {ad.hook_type && (
+                            <span className="text-xs bg-purple-900 text-purple-300 rounded-full px-2 py-0.5">
+                              {ad.hook_type}
+                            </span>
+                          )}
+                          {ad.ad_type && (
+                            <span className="text-xs bg-cyan-900 text-cyan-300 rounded-full px-2 py-0.5">
+                              {ad.ad_type}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Title */}
+                        {ad.title && (
+                          <p className="text-white font-medium text-sm">
+                            {ad.title}
+                          </p>
+                        )}
+
+                        {/* Body */}
+                        {ad.body && (
+                          <p className="text-gray-400 text-sm whitespace-pre-line line-clamp-4">
+                            {ad.body}
+                          </p>
+                        )}
+
+                        {/* Notes */}
+                        {ad.notes && (
+                          <div className="bg-gray-800 rounded-lg px-3 py-2 text-xs text-yellow-300">
+                            💡 {ad.notes}
+                          </div>
+                        )}
+
+                        {/* Tags */}
+                        {ad.tags && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {ad.tags.split(",").map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-xs bg-gray-800 text-gray-400 rounded-full px-2 py-0.5"
+                              >
+                                {tag.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Platforms */}
+                        {ad.platforms && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {ad.platforms.split(",").map((p) => (
+                              <span
+                                key={p}
+                                className="text-xs bg-blue-900/40 text-blue-300 rounded-full px-2 py-0.5"
+                              >
+                                {p.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Date + link */}
+                        <div className="flex items-center gap-3 text-xs text-gray-600">
+                          <span>
+                            {new Date(ad.created_at).toLocaleDateString("pt-BR")}
+                          </span>
+                          {ad.ad_url && (
+                            <a
+                              href={ad.ad_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300 hover:underline"
+                            >
+                              Ver ad original →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Remove button */}
+                      <button
+                        onClick={() => handleRemoveFavorite(ad.id)}
+                        className="text-gray-700 hover:text-red-400 transition-colors text-sm p-1"
+                        title="Remover"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </main>
