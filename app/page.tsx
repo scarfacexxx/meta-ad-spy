@@ -5,24 +5,6 @@ import SavedSearches from "@/components/SavedSearches";
 
 type Tab = "library" | "favorites" | "add";
 
-interface ScrapedAd {
-  body: string | null;
-  title: string | null;
-  started: string | null;
-  status: string | null;
-  platforms: string[];
-  snapshot_url: string | null;
-}
-
-interface ScrapeResult {
-  page_name: string;
-  page_id: string | null;
-  query: string | null;
-  country: string;
-  ads: ScrapedAd[];
-  total: number;
-}
-
 interface SavedAd {
   id: number;
   page_name: string;
@@ -64,10 +46,6 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("library");
   const [favorites, setFavorites] = useState<SavedAd[]>([]);
   const [filterTag, setFilterTag] = useState<string>("");
-  const [scrapeUrl, setScrapeUrl] = useState("");
-  const [scraping, setScraping] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState<ScrapeResult | null>(null);
-  const [scrapeError, setScrapeError] = useState<string | null>(null);
 
   // Add form state
   const [form, setForm] = useState({
@@ -131,50 +109,6 @@ export default function Home() {
     try {
       await fetch(`/api/favorites/${id}`, { method: "DELETE" });
       setFavorites((prev) => prev.filter((f) => f.id !== id));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  async function handleScrape(e: React.FormEvent) {
-    e.preventDefault();
-    if (!scrapeUrl.trim()) return;
-    setScraping(true);
-    setScrapeError(null);
-    setScrapeResult(null);
-    try {
-      const res = await fetch("/api/scrape", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: scrapeUrl }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setScrapeError(data.error ?? "Erro ao extrair dados.");
-      } else {
-        setScrapeResult(data);
-      }
-    } catch {
-      setScrapeError("Falha ao conectar com o servidor.");
-    } finally {
-      setScraping(false);
-    }
-  }
-
-  async function handleSaveScrapedAd(ad: ScrapedAd, pageName: string) {
-    try {
-      await fetch("/api/favorites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          page_name: pageName,
-          ad_url: ad.snapshot_url ?? scrapeUrl,
-          body: ad.body,
-          title: ad.title,
-          platforms: ad.platforms,
-        }),
-      });
-      loadFavorites();
     } catch {
       /* ignore */
     }
@@ -278,45 +212,43 @@ export default function Home() {
         {/* Ad Library tab */}
         {tab === "library" && (
           <div className="space-y-6">
-            {/* Scrape URL form */}
-            <form
-              onSubmit={handleScrape}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4"
-            >
-              <h2 className="text-lg font-semibold">
-                Cole a URL da Ad Library
-              </h2>
-              <p className="text-sm text-gray-400">
-                Abra a Ad Library, busque o concorrente, copie a URL da página e
-                cole aqui. O app extrai os ads automaticamente.
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={scrapeUrl}
-                  onChange={(e) => setScrapeUrl(e.target.value)}
-                  placeholder="https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=BR&view_all_page_id=..."
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  type="submit"
-                  disabled={scraping || !scrapeUrl.trim()}
-                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg px-5 py-2 text-sm transition-colors whitespace-nowrap"
-                >
-                  {scraping ? "Extraindo..." : "Extrair Ads"}
-                </button>
+            {/* Quick instructions */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+              <h2 className="text-lg font-semibold">🎯 Fluxo rápido</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="bg-gray-800 rounded-lg p-4 space-y-2">
+                  <div className="text-2xl">1️⃣</div>
+                  <p className="text-gray-300 font-medium">Abra a Ad Library</p>
+                  <p className="text-gray-500 text-xs">
+                    Clique em um concorrente acima ou no botão abaixo
+                  </p>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4 space-y-2">
+                  <div className="text-2xl">2️⃣</div>
+                  <p className="text-gray-300 font-medium">Ache os melhores ads</p>
+                  <p className="text-gray-500 text-xs">
+                    Filtre por ativos e ordene por mais impressões
+                  </p>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4 space-y-2">
+                  <div className="text-2xl">3️⃣</div>
+                  <p className="text-gray-300 font-medium">Salve aqui</p>
+                  <p className="text-gray-500 text-xs">
+                    Clique em &quot;+ Salvar Ad&quot; e cole a copy, URL e suas notas
+                  </p>
+                </div>
               </div>
-            </form>
+            </div>
 
             {/* Open Ad Library button */}
             <a
               href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=BR&media_type=all"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 font-medium rounded-xl py-3 text-sm transition-colors"
+              className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl py-4 text-sm transition-colors"
             >
               <svg
-                className="w-4 h-4"
+                className="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -328,92 +260,16 @@ export default function Home() {
                   d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                 />
               </svg>
-              Abrir Meta Ad Library no navegador
+              Abrir Meta Ad Library
             </a>
 
-            {/* Scrape error */}
-            {scrapeError && (
-              <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
-                {scrapeError}
-              </div>
-            )}
-
-            {/* Scrape results */}
-            {scrapeResult && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-300">
-                    {scrapeResult.page_name} — {scrapeResult.total} ads
-                    encontrados
-                  </h3>
-                </div>
-                {scrapeResult.ads.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 text-sm">
-                    <p>
-                      A Ad Library não retornou dados extraíveis via scraping.
-                    </p>
-                    <p className="mt-2">
-                      Use o botão{" "}
-                      <span className="text-blue-400">+ Salvar Ad</span>{" "}
-                      para adicionar manualmente.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3">
-                    {scrapeResult.ads.map((ad, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex items-start gap-3"
-                      >
-                        <div className="flex-1 min-w-0 space-y-1">
-                          {ad.body && (
-                            <p className="text-sm text-gray-300 line-clamp-3">
-                              {ad.body}
-                            </p>
-                          )}
-                          {ad.started && (
-                            <p className="text-xs text-gray-600">
-                              Iniciou: {ad.started}
-                            </p>
-                          )}
-                          {ad.snapshot_url && (
-                            <a
-                              href={ad.snapshot_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-400 hover:underline"
-                            >
-                              Ver criativo →
-                            </a>
-                          )}
-                        </div>
-                        <button
-                          onClick={() =>
-                            handleSaveScrapedAd(
-                              ad,
-                              scrapeResult.page_name
-                            )
-                          }
-                          className="text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-1.5 whitespace-nowrap"
-                        >
-                          Salvar
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Loading */}
-            {scraping && (
-              <div className="flex items-center justify-center py-12">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                <span className="ml-3 text-gray-400">
-                  Extraindo ads da Ad Library...
-                </span>
-              </div>
-            )}
+            {/* Quick save shortcut */}
+            <button
+              onClick={() => setTab("add")}
+              className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 font-medium rounded-xl py-3 text-sm transition-colors"
+            >
+              Achei um ad bom → Salvar agora
+            </button>
           </div>
         )}
 
